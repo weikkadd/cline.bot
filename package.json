@@ -1,0 +1,15 @@
+{
+  "name": "cline-bot",
+  "version": "0.1.0",
+  "private": true,
+  "description": "cline.bot — zero-dependency HTTP service, ready to deploy on Deplexo.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test": "node --test test/*.test.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT"
+}
