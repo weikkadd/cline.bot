@@ -1,0 +1,12 @@
+version: 1
+
+# Worker: the agent dials out to the panel and runs in the foreground.
+# No port, no public URL, no health check on an HTTP listener.
+type: worker
+
+build:
+  framework: dockerfile
+  dockerfile: Dockerfile
+
+run:
+  command: /usr/local/bin/start.sh
