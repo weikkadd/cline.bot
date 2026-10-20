@@ -80,6 +80,17 @@ export NZ_REPORT_DELAY="${NZ_REPORT_DELAY:-3}"
 # in a container that has no other diagnostics.
 export NZ_DEBUG="${NZ_DEBUG:-true}"
 
+# TLS on the agent's gRPC connection.
+#
+# Nezha v1 panels (1.14.x) serve gRPC in PLAINTEXT only: the dashboard's
+# grpc.NewServer has no TLS credentials, and the "tls" setting there only
+# controls the generated install command. A v2 panel (2.x) can serve gRPC
+# over TLS.
+#
+# So the default is plaintext, which works with both panel generations, and
+# an operator who knows the panel serves TLS can turn it on explicitly.
+export NZ_TLS="${NZ_TLS:-false}"
+
 # The image is immutable and version-pinned. Self-update would try to
 # replace the binary in a read-only filesystem, so turn it off unless the
 # operator explicitly opts in.
@@ -121,6 +132,20 @@ if [ -n "$PROBE_RESULT" ] && [ "$PROBE_RESULT" != "000" ]; then
   log "preflight: ${PROBE_HOST}:${PROBE_PORT} reachable (HTTP ${PROBE_RESULT})"
 else
   log "preflight: ${PROBE_HOST}:${PROBE_PORT} NOT reachable. Check NZ_SERVER, and confirm the panel's gRPC port (8008 by default) is exposed to the internet."
+fi
+
+# A TLS mismatch is the most common failure against a v1 panel: the panel
+# speaks plaintext gRPC, so an agent configured with NZ_TLS=true fails the
+# handshake with "tls: first record does not look like a TLS handshake".
+# Probe the TLS handshake explicitly so the log says which side is wrong.
+if [ "$NZ_TLS" = "true" ]; then
+  if curl -s -o /dev/null --connect-timeout 8 --max-time 15 \
+    --cacert /etc/ssl/certs/ca-certificates.crt \
+    "https://${PROBE_HOST}:${PROBE_PORT}/" 2>/dev/null; then
+    log "preflight: TLS handshake with ${PROBE_HOST}:${PROBE_PORT} OK"
+  else
+    log "preflight: TLS handshake with ${PROBE_HOST}:${PROBE_PORT} FAILED. A Nezha v1 (1.14.x) panel serves gRPC in plaintext only; set NZ_TLS=false for it."
+  fi
 fi
 
 # ---- run with supervision ----------------------------------------------------

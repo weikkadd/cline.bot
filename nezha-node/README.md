@@ -40,16 +40,51 @@ Set these as environment variables in the Deplexo dashboard
 | --- | --- | --- |
 | `NZ_SERVER` | yes | Panel gRPC address, `host:port` — the port defaults to `8008` if omitted |
 | `NZ_CLIENT_SECRET` | yes | The agent's client secret, copied from the panel when you add the node |
-| `NZ_TLS` | no | `true` when the panel serves gRPC over TLS |
+| `NZ_TLS` | no | `true` only for a v2 panel that serves gRPC over TLS. **Leave `false` for a v1 panel** |
 | `NZ_INSECURE_TLS` | no | `true` to skip certificate verification (self-signed panels) |
 
-Example values:
+Example values for a v1 panel:
 
 ```
 NZ_SERVER=panel.example.com:8008
 NZ_CLIENT_SECRET=<paste-from-panel>
-NZ_TLS=true
+NZ_TLS=false
 ```
+
+### Panel version compatibility
+
+This node runs the **v2 agent (2.3.5)**. It works with both panel generations,
+verified end to end against a real `v1.14.14` panel:
+
+| Panel | Agent | gRPC | TLS | Result |
+| --- | --- | --- | --- | --- |
+| v1.14.x | v2.3.5 | same proto | plaintext only | works, `NZ_TLS=false` |
+| v2.x | v2.3.5 | same proto | optional | works |
+
+The v2 agent's `proto/nezha.proto` differs from the v1.14.14 panel's only by
+**added** fields (`State.gpus`, field 18). No existing field was changed or
+removed, so proto3 forward compatibility holds and the v1 panel ignores the
+extra field. The gRPC service methods, the `client_secret` / `client_uuid`
+metadata keys, and the agent config format (`NZ_*` environment variables,
+`-c` config path) are identical between the two.
+
+The one incompatibility is TLS: a v1 panel's `grpc.NewServer` is created
+without TLS credentials, so its agent port is plaintext. The `tls` setting in
+a v1 panel only affects the install command it generates for you. An agent
+configured with `NZ_TLS=true` fails with:
+
+```
+rpc error: code = Unavailable desc = "transport: authentication handshake
+failed: tls: first record does not look like a TLS handshake"
+```
+
+`start.sh` defaults `NZ_TLS` to `false`, which is correct for both panel
+generations, and probes the TLS handshake separately when it is enabled so a
+mismatch is named in the logs.
+
+If you prefer to match the panel line exactly, the agent releases tagged
+`v1.14.x` use the same configuration interface and also work; the version
+pinned here is newer and receives fixes.
 
 ### Expose the panel's gRPC port
 
@@ -104,8 +139,10 @@ Common problems:
 | Symptom | Cause |
 | --- | --- |
 | `preflight: ... NOT reachable` | Wrong `NZ_SERVER`, or the panel's gRPC port is not exposed |
+| `tls: first record does not look like a TLS handshake` | `NZ_TLS=true` against a v1 panel. Set `NZ_TLS=false` |
 | `FATAL: NZ_SERVER is not set` | Environment variable missing in the dashboard |
-| Agent starts but the panel shows nothing | The client secret does not match the entry on the panel |
+| `客户端认证失败` / auth failure | The client secret does not match the entry on the panel |
+| Agent starts but the panel shows nothing | The panel's gRPC port is closed to the internet |
 | The node appears twice in the panel | `/data` was not mounted, so the UUID was regenerated |
 
 ## Security notes
